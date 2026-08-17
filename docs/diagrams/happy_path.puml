@@ -1,0 +1,89 @@
+
+@startuml
+title AI On-Call Investigation Assistant - Happy Path
+
+actor User
+participant "API\nPOST /investigate" as API_POST
+participant "API\nGET /investigate/{id}" as API_GET
+participant "RabbitMQ" as RMQ
+participant "Celery Worker" as Worker
+database "PostgreSQL" as DB
+participant "Tools\n(logs, deployments, runbooks)" as Tools
+participant "LLM\n(OpenAI)" as LLM
+
+User -> API_POST: POST {description, idempotency_key}
+API_POST -> API_POST: validate request
+
+API_POST -> DB: check idempotency_key
+alt key already exists
+    API_POST --> User: 200 OK {investigation_id, status: "already exists"}
+else key is new
+    API_POST -> DB: INSERT investigations (PENDING)
+    API_POST -> DB: INSERT 4 investigation_steps (PENDING)
+    API_POST -> RMQ: publish collect_logs(investigation_id)
+    API_POST --> User: 202 Accepted {investigation_id}
+end
+
+RMQ -> Worker: deliver collect_logs message
+
+== Task 1: Collect Logs ==
+Worker -> DB: query step status (idempotency check)
+alt step already SUCCEEDED
+    Worker -> RMQ: publish collect_deployments(investigation_id)
+else step not done
+    Worker -> Tools: execute collect_logs()
+    Tools --> Worker: logs data
+    Worker -> DB: UPDATE step status=SUCCEEDED, result=<logs>
+    Worker -> RMQ: publish collect_deployments(investigation_id)
+end
+Worker -> RMQ: ack
+
+== Task 2: Collect Deployments ==
+RMQ -> Worker: deliver collect_deployments message
+Worker -> DB: query step status (idempotency check)
+alt step already SUCCEEDED
+    Worker -> RMQ: publish retrieve_runbooks(investigation_id)
+else step not done
+    Worker -> DB: read Task 1 result
+    Worker -> Tools: execute collect_deployments()
+    Tools --> Worker: deployment data
+    Worker -> DB: UPDATE step status=SUCCEEDED, result=<deployments>
+    Worker -> RMQ: publish retrieve_runbooks(investigation_id)
+end
+Worker -> RMQ: ack
+
+== Task 3: Retrieve Runbooks ==
+RMQ -> Worker: deliver retrieve_runbooks message
+Worker -> DB: query step status (idempotency check)
+alt step already SUCCEEDED
+    Worker -> RMQ: publish synthesize_report(investigation_id)
+else step not done
+    Worker -> DB: read Task 2 result
+    Worker -> Tools: execute retrieve_runbooks()
+    Tools --> Worker: runbook data
+    Worker -> DB: UPDATE step status=SUCCEEDED, result=<runbooks>
+    Worker -> RMQ: publish synthesize_report(investigation_id)
+end
+Worker -> RMQ: ack
+
+== Task 4: LLM Synthesis ==
+RMQ -> Worker: deliver synthesize_report message
+Worker -> DB: query step status (idempotency check)
+alt step already SUCCEEDED
+    Worker -> Worker: skip, already done
+else step not done
+    Worker -> DB: read all step results (Tasks 1, 2, 3)
+    Worker -> LLM: synthesize report from all evidence
+    LLM --> Worker: investigation report
+    Worker -> DB: UPDATE step status=SUCCEEDED, result=<report>
+    Worker -> DB: UPDATE investigations status=COMPLETED, report=<report>
+end
+Worker -> RMQ: ack
+
+== Polling for Results ==
+User -> API_GET: GET /investigate/{id}
+API_GET -> DB: query investigations + steps
+DB --> API_GET: {status, steps, report}
+API_GET --> User: 200 OK {investigation_id, status, report}
+
+@enduml

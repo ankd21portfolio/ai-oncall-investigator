@@ -1,0 +1,47 @@
+@startuml
+title Crash Recovery - Worker Dies During Task 2
+
+participant "RabbitMQ" as RMQ
+participant "Celery Worker" as Worker
+database "PostgreSQL" as DB
+participant "Tools" as Tools
+
+== Task 2 is executing ==
+RMQ -> Worker: deliver collect_deployments message
+Worker -> DB: query step status (idempotency check)
+DB --> Worker: status = RUNNING (not yet SUCCEEDED)
+Worker -> Worker: begin executing collect_deployments tool
+Worker -> Tools: execute collect_deployments()
+
+note over Worker: WORKER CRASHES HERE
+
+== RabbitMQ detects failure ==
+note over RMQ: connection drops, message unacked
+note over RMQ: message re-queued for redelivery
+
+== Worker restarts ==
+note over Worker: new worker process starts, reconnects to RMQ
+
+RMQ -> Worker: redeliver collect_deployments message
+
+== Task 2 resumes (idempotent replay) ==
+Worker -> DB: query step status (idempotency check)
+
+alt step status = SUCCEEDED (completed before crash)
+    Worker -> RMQ: publish retrieve_runbooks (Task 3)
+    Worker -> RMQ: ack
+else step status = RUNNING (crash happened mid-execution)
+    Worker -> DB: read Task 1 result from Postgres
+    DB --> Worker: Task 1 result (logs data)
+    Worker -> Tools: execute collect_deployments (again)
+    Tools --> Worker: deployment data
+    Worker -> DB: UPDATE step status=SUCCEEDED, result=<deployments>
+    Worker -> RMQ: publish retrieve_runbooks (Task 3)
+    Worker -> RMQ: ack
+end
+
+== Workflow continues normally ==
+note over RMQ: Task 3 message in queue
+note over Worker: picks up Task 3, continues workflow
+
+@enduml

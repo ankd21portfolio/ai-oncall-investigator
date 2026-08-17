@@ -1,0 +1,31 @@
+@startuml
+title Data Model - AI On-Call Investigation Assistant
+
+entity "INVESTIGATIONS" as inv {
+  * INVESTIGATION_ID : UUID <<PK>>
+  --
+  REQUEST_ID : STRING <<UNIQUE>>
+  DESCRIPTION : TEXT
+  ISSUE_STATUS : STRING
+  CURRENT_TASK : STRING
+  FINAL_REPORT : TEXT
+  CREATED_AT : TIMESTAMP
+  UPDATED_AT : TIMESTAMP
+}
+
+entity "INVESTIGATION_STEPS" as steps {
+  * TASK_ID : UUID <<PK>>
+  --
+  INVESTIGATION_ID : UUID <<FK>>
+  TASK_NAME : STRING
+  TASK_STATUS : STRING
+  TASK_ORDER : INTEGER
+  RESULT : JSONB
+  ATTEMPTS : INTEGER
+  CREATED_AT : TIMESTAMP
+  UPDATED_AT : TIMESTAMP
+}
+
+inv ||--o{ steps : "has many"
+
+@enduml

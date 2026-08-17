@@ -1,0 +1,23 @@
+@startuml
+title Task State Machine
+
+state "PENDING" as pending
+state "RUNNING" as running
+state "RETRYING" as retrying
+state "SUCCEEDED" as succeeded
+state "FAILED" as failed
+
+pending --> running : worker picks up message
+
+running --> succeeded : task succeeds, write to Postgres
+running --> retrying : transient failure
+retrying --> running : retry with backoff
+retrying --> failed : max retries exhausted
+
+running --> running : worker crash\nredelivered\nre-run from start
+succeeded --> succeeded : crash before ack\nidempotency check\nskip execution
+
+succeeded --> [*] : done
+failed --> [*] : done
+
+@enduml
