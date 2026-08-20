@@ -111,6 +111,12 @@ Without back_populates, setting one side doesn't update the other.
 ### Q: Is create_tables() in main.py production-grade?
 **A:** Not really. It's acceptable for portfolio/MVP. Production uses migration tools. Defensible answer: "The design is locked, no schema changes planned. Alembic would be overengineering for this scope."
 
+Interview-ready answers
+Q: How do you manage database schema?
+A: "I use SQLAlchemy ORM with Postgres. Tables are created on application startup via metadata.create_all(). For this MVP, the schema is locked so migrations aren't needed. In production, I'd introduce Alembic for versioned migrations."
+
+Q: How does your app connect to Postgres?
+A: "config.py builds the connection URL from environment variables. Inside Docker, containers reach each other by service name — postgres:5432 — not localhost. db.py creates the engine and provides per-request sessions via FastAPI dependency injection."
 ---
 
 ## Files created today
