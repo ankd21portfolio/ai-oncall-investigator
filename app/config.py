@@ -1,0 +1,17 @@
+import os
+
+# Postgres components
+POSTGRES_USER = os.getenv("POSTGRES_USER", "oncall")
+POSTGRES_PASSWORD = os.getenv("POSTGRES_PASSWORD", "oncall_pass")
+POSTGRES_DB = os.getenv("POSTGRES_DB", "oncall_investigator")
+POSTGRES_HOST = os.getenv("POSTGRES_HOST", "localhost")
+POSTGRES_PORT = os.getenv("POSTGRES_PORT", "5432")
+
+# RabbitMQ components
+RABBITMQ_DEFAULT_USER = os.getenv("RABBITMQ_DEFAULT_USER", "guest")
+RABBITMQ_DEFAULT_PASS = os.getenv("RABBITMQ_DEFAULT_PASS", "guest")
+RABBITMQ_HOST = os.getenv("RABBITMQ_HOST", "localhost")
+RABBITMQ_PORT = os.getenv("RABBITMQ_PORT", "5672")
+
+POSTGRES_URL = f"postgresql://{POSTGRES_USER}:{POSTGRES_PASSWORD}@{POSTGRES_HOST}:{POSTGRES_PORT}/{POSTGRES_DB}"
+RABBITMQ_URL = f"amqp://{RABBITMQ_DEFAULT_USER}:{RABBITMQ_DEFAULT_PASS}@{RABBITMQ_HOST}:{RABBITMQ_PORT}//"
